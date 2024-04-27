@@ -1,4 +1,5 @@
 import random
+import socket
 
 def CreatePrimitiveRoot(primeNumber:int)->int:
     primitiveRoot:int = 0
@@ -11,16 +12,7 @@ def CreatePrimitiveRoot(primeNumber:int)->int:
             remainders.add(remainder)
         if len(remainders) == primeNumber-1:
             return root            
-    return primitiveRoot    
-
-primeNumber:int = int(input("Enter the prime number: "))
-primitiveRoot:int = CreatePrimitiveRoot(primeNumber)
-if primitiveRoot == 0:
-    Exception("Primitive root not found")
-print(f"Prime number: {primeNumber}, Primitive root: {primitiveRoot}")
-
-#send primeNumber and primitiveRoot to receiver
- 
+    return primitiveRoot   
 
 class Sender:
     def __init__(self:"Sender",primeNumber:int,primitiveRoot:int)->None:
@@ -31,7 +23,8 @@ class Sender:
         self.encryptionKey:int = 0
     def CreateKeys(self:"Sender")->None:
         self.secretKey = random.randint(1,self.primeNumber)
-        self.publicKey = (self.primitiveRoot**self.secretKey)%self.primeNumber
+        self.publicKey = (self.primitiveRoot**self.secretKey)
+        self.publicKey = self.publicKey%self.primeNumber
     def CreateEncryptionKey(self:"Sender",reciverPublicKey:int)->None:
         self.encryptionKey = (reciverPublicKey**self.secretKey)%self.primeNumber
     def EncryptMessage(self:"Sender",message:str)->str:
@@ -46,19 +39,66 @@ class Sender:
                 encryptedMessage += character
         print(f"Encrypted message: {encryptedMessage}")
         return encryptedMessage
-            
+    def DecryptMessage(self:"Sender",encryptedMessage:str)->str:
+        decryptedMessage:str = ""
+        print(f"Encrypted message: {encryptedMessage}")
+        for character in encryptedMessage:
+            if character.isalpha():
+                if character.isupper():
+                    decryptedMessage += chr((ord(character)+(26-self.encryptionKey)-65)%26+65)
+                else:
+                    decryptedMessage += chr((ord(character)+(26-self.encryptionKey)-97)%26+97)
+            else:  
+                decryptedMessage += character
+        print(f"Decrypted message: {decryptedMessage}")
+        return decryptedMessage
 
-sender:Sender = Sender(primeNumber,primeNumber)
-sender.CreateKeys()
 
-#send publicKey to receiver
+def Server():
+    host = socket.gethostname()
+    port = 12345
+    server_socket = socket.socket()
+    server_socket.bind((host, port))
+    server_socket.listen(2)
+    c, address = server_socket.accept()
 
-#recive publicKey from sender
-reciverPublicKey:int = 0
-sender.CreateEncryptionKey(reciverPublicKey)
+    #create prime number and primitive root
+    primeNumber:int = int(input("Enter the prime number: "))
+    primitiveRoot:int = CreatePrimitiveRoot(primeNumber)
+    if primitiveRoot == 0:
+        Exception("Primitive root not found")
+    print(f"Prime number: {primeNumber}, Primitive root: {primitiveRoot}")
+
+    #create the sender class
+    sender:Sender = Sender(primeNumber,primitiveRoot)
+    sender.CreateKeys()
+    setup:str = f"{primeNumber},{primitiveRoot},{sender.publicKey}"
+    c.send(setup.encode())
+    reciverPublicKey:int =int(c.recv(1024).decode())  
+    sender.CreateEncryptionKey(reciverPublicKey)
+
+
+    while True:
+        message:str = input("\nEnter the message:")
+        encryptedMessage:str = sender.EncryptMessage(message)
+        c.send(encryptedMessage.encode())
+        if(message == "bye"):
+            break
+        reciverMessage:str = c.recv(1024).decode()
+        decryptedMessage:str = sender.DecryptMessage(reciverMessage)
+        if decryptedMessage == "bye":
+            break
+
+
+    # Close the client connection
+    c.close()
+
+
  
 
-message:str = input("\nEnter the message:")
-encryptedMessage:str = sender.EncryptMessage(message)
+
 
 #send encryptedMessage to receiver
+
+
+Server()
